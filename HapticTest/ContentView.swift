@@ -7,14 +7,21 @@
 
 import SwiftUI
 import SwiftData
-
+import CoreHaptics
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [Item]
-
+@State private var counter = 0
+    @State private var engine : CHHapticEngine?
     var body: some View {
         NavigationSplitView {
+            Button {
+               complexSuccess()
+            } label: {
+              Text("Test haptic")
+            }.onAppear(perform: prepareHaptics)//Important
             List {
+            
                 ForEach(items) { item in
                     NavigationLink {
                         Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
@@ -26,12 +33,18 @@ struct ContentView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
+                    EditButton().sensoryFeedback(.selection, trigger: items)
                 }
                 ToolbarItem {
-                    Button(action: addItem) {
+                    Button {
+                        addItem()
+                        counter+=1
+                        
+                    } label: {
                         Label("Add Item", systemImage: "plus")
-                    }
+                    }.sensoryFeedback(.increase, trigger: counter)
+                    
+                  
                 }
             }
         } detail: {
@@ -51,6 +64,33 @@ struct ContentView: View {
             for index in offsets {
                 modelContext.delete(items[index])
             }
+        }
+    }
+    func prepareHaptics(){
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {return}
+        do {
+            engine = try CHHapticEngine()
+            try engine?.start()
+        } catch {
+            print("There was an error with CHHapticEngine : \(error.localizedDescription)")
+        }
+    }
+    func complexSuccess(){
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {return}
+        var events = [CHHapticEvent]()
+        
+        let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 1)
+        let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 1)
+        let event = CHHapticEvent(eventType: .hapticTransient, parameters: [intensity, sharpness], relativeTime: 0)
+        events.append(event)
+        
+        do {
+            let pattern = try CHHapticPattern(events: events, parameters: [])
+            let player = try engine?.makePlayer(with: pattern)
+            try player?.start(atTime: 0)
+            
+        }catch {
+            print("Failed to play pattern \(error.localizedDescription)")
         }
     }
 }
